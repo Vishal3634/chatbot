@@ -10,10 +10,9 @@ from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 import time
 
-# Load environment variables
 load_dotenv()
 
-# ========== PAGE CONFIG ==========
+
 st.set_page_config(
     page_title="Personal Assistant Chatbot ",
     page_icon="🤖",
@@ -21,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ========== CUSTOM CSS ==========
+
 st.markdown("""
 <style>
     .main-header {
@@ -63,17 +62,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== SETUP ==========
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("⚠️ Google API Key not found!")
+    st.error(" Google API Key not found!")
     st.info("Please create a .env file with your GOOGLE_API_KEY")
     st.stop()
 
 if not PINECONE_API_KEY:
-    st.error("⚠️ Pinecone API Key not found!")
+    st.error(" Pinecone API Key not found!")
     st.info("Please add your PINECONE_API_KEY to the .env file")
     st.stop()
 
@@ -98,18 +97,17 @@ def get_model():
 
 model = get_model()
 
-# ========== PINECONE SETUP ==========
-INDEX_NAME = "rag-chatbot"  # You can change this name
-DIMENSION = 768  # Google's text-embedding-004 dimension
+INDEX_NAME = "rag-chatbot"  
+DIMENSION = 768  
 
 @st.cache_resource
 def initialize_pinecone():
     """Initialize Pinecone connection and create/connect to index"""
     try:
-        # Initialize Pinecone
+        
         pc = Pinecone(api_key=PINECONE_API_KEY)
         
-        # Check if index exists, if not create it
+    
         existing_indexes = [index.name for index in pc.list_indexes()]
         
         if INDEX_NAME not in existing_indexes:
@@ -117,16 +115,16 @@ def initialize_pinecone():
             pc.create_index(
                 name=INDEX_NAME,
                 dimension=DIMENSION,
-                metric="cosine",  # cosine similarity for semantic search
+                metric="cosine",  
                 spec=ServerlessSpec(
                     cloud="aws",
-                    region="us-east-1"  # Change to your preferred region
+                    region="us-east-1" 
                 )
             )
-            # Wait for index to be ready
+            
             time.sleep(1)
         
-        # Connect to index
+        
         index = pc.Index(INDEX_NAME)
         return pc, index
     
@@ -134,7 +132,7 @@ def initialize_pinecone():
         st.error(f"Error initializing Pinecone: {e}")
         st.stop()
 
-# ========== FILE READERS (Same as before) ==========
+
 
 def read_pdf(file_bytes):
     """Extract text from PDF file bytes"""
@@ -199,7 +197,6 @@ def read_uploaded_file(uploaded_file):
         st.info("Supported: .pdf, .docx, .txt, .png, .jpg, .jpeg")
         return None
 
-# ========== CHUNKING ==========
 
 def chunk_text(text, chunk_size=1000, overlap=200):
     """Split large text into smaller chunks with overlap"""
@@ -216,7 +213,7 @@ def chunk_text(text, chunk_size=1000, overlap=200):
     
     return chunks
 
-# ========== EMBEDDING ==========
+
 
 def get_embedding(text, task_type="retrieval_document"):
     """Convert text to embedding using Google's API"""
@@ -227,7 +224,7 @@ def get_embedding(text, task_type="retrieval_document"):
     )
     return result['embedding']
 
-# ========== PINECONE OPERATIONS ==========
+
 
 def add_document_to_pinecone(text, index, doc_id=None, metadata=None):
     """
@@ -240,11 +237,11 @@ def add_document_to_pinecone(text, index, doc_id=None, metadata=None):
         metadata: Additional metadata to store with the vector
     """
     try:
-        # Generate unique ID if not provided
+        
         if doc_id is None:
             doc_id = f"doc_{int(time.time() * 1000)}"
         
-        # Check if text is too large and needs chunking
+        
         if len(text) > 2000:
             chunks = chunk_text(text, chunk_size=1000, overlap=200)
             
@@ -252,9 +249,9 @@ def add_document_to_pinecone(text, index, doc_id=None, metadata=None):
                 chunk_id = f"{doc_id}_chunk_{i}"
                 embedding = get_embedding(chunk)
                 
-                # Prepare metadata
+                
                 chunk_metadata = {
-                    "text": chunk[:1000],  # Store first 1000 chars
+                    "text": chunk[:1000],  
                     "chunk_index": i,
                     "total_chunks": len(chunks),
                     "parent_id": doc_id
@@ -263,16 +260,16 @@ def add_document_to_pinecone(text, index, doc_id=None, metadata=None):
                 if metadata:
                     chunk_metadata.update(metadata)
                 
-                # Upsert to Pinecone
+                
                 index.upsert(vectors=[(chunk_id, embedding, chunk_metadata)])
             
             return len(chunks)
         else:
-            # Single document - no chunking needed
+            
             embedding = get_embedding(text)
             
             doc_metadata = {
-                "text": text[:1000],  # Store first 1000 chars
+                "text": text[:1000],  
                 "chunk_index": 0,
                 "total_chunks": 1
             }
@@ -280,7 +277,7 @@ def add_document_to_pinecone(text, index, doc_id=None, metadata=None):
             if metadata:
                 doc_metadata.update(metadata)
             
-            # Upsert to Pinecone
+            
             index.upsert(vectors=[(doc_id, embedding, doc_metadata)])
             
             return 1
@@ -336,13 +333,13 @@ def is_document_related(question, best_score):
     THRESHOLD = 0.7  # Adjust based on your needs
     return best_score > THRESHOLD
 
-# ========== ANSWER GENERATION ==========
+
 
 def ask_question(question, chat, index):
     """Answer question using RAG or chat"""
     relevant_docs, scores, matches = search_pinecone(question, index, top_k=3)
     
-    # Check if we have relevant documents
+   
     best_score = scores[0] if scores else 0
     mode = "RAG" if is_document_related(question, best_score) else "CHAT"
     
@@ -364,11 +361,11 @@ Answer using the context above."""
     else:
         return "I'm sorry, I cannot answer that.", mode, []
 
-# ========== INITIALIZE SAMPLE DATA ==========
+
 
 def initialize_sample_documents(index):
     """Add sample documents to Pinecone on first run"""
-    # Check if we have any vectors
+    
     stats = index.describe_index_stats()
     
     if stats['total_vector_count'] == 0:
@@ -394,7 +391,7 @@ def initialize_sample_documents(index):
         
         st.success("✅ Sample documents added!")
 
-# ========== SESSION STATE ==========
+
 
 if 'pc' not in st.session_state:
     st.session_state.pc, st.session_state.index = initialize_pinecone()
@@ -406,7 +403,7 @@ if 'chat' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# ========== MAIN UI ==========
+
 
 # Header
 st.markdown('<div class="main-header">🤖 Personal Assistant Chatbot</div>', unsafe_allow_html=True)
