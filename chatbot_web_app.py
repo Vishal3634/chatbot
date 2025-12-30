@@ -87,7 +87,7 @@ generation_config = {
 @st.cache_resource
 def get_model():
     return genai.GenerativeModel(
-        model_name="gemini-2.0-flash-exp",
+        model_name="gemini-2.5-flash",
         generation_config=generation_config,
         system_instruction="""You are a helpful assistant with access to documents.
         When context is provided, use it to answer accurately.
